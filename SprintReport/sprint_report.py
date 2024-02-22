@@ -42,16 +42,24 @@ def find_issue_in_jira_sprint(jira_api, project, sprint):
             break
 
         issue_index += 1
-
+        epics = {}
         # For each issue in JIRA with LP# in the title
         for issue in issues:
             summary = issue.fields.summary
             issue_type = issue.fields.issuetype.name
+            epic_link = issue.fields.customfield_10014
+            if epic_link not in epics:
+                try:
+                    epics[epic_link] = jira_api.issue(epic_link).fields.summary
+                except JIRAError:
+                    epics[epic_link] = "No epic"
+            epic_name = epics[epic_link]
             found_issues[issue.key]= {
                 "key":issue.key,
                 "type":issue_type,
                 "status": issue.fields.status,
-                "epic": issue.fields.customfield_10014,
+                "epic": epic_link,
+                "epic_name": epic_name,
                 "summary":summary}
 
     return found_issues
@@ -97,7 +105,7 @@ def print_jira_report(issues):
         if issues[issue]["epic"] != epic:
             epic = issues[issue]["epic"]
             if epic:
-                print("\n## {}".format(key_to_md(epic)))
+                print("\n## {}: {}".format(key_to_md(epic), issues[issue]["epic_name"]))
             else:
                 print("\n## Issues without an epic")
         print_jira_issue(issues[issue])
@@ -129,7 +137,7 @@ def main(args=None):
     sprint = opts.sprint
     # Create a set of all Jira issues completed in a given sprint
     issues = find_issue_in_jira_sprint(jira, opts.project, sprint)
-    print("Found {} issue{} in JIRA".format(
+    print("Found {} issue{} in JIRA\n".format(
         len(issues),"s" if len(issues)> 1 else "")
     )
 
