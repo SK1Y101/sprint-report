@@ -1,0 +1,5 @@
+.venv
+SprintReport.egg-info
+build
+dist
+
