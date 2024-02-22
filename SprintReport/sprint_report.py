@@ -34,8 +34,8 @@ def find_issue_in_jira_sprint(jira_api, project, sprint):
     while True:
         start_index = issue_index * issue_batch
         request = "project = {} " \
-            "AND sprint = \"{}\" " \
-            "AND status = Done ORDER BY type".format(project, sprint)
+            "AND cf[10020] = \"{}\" " \
+            "AND status in (Done, 'In Progress', 'In review', 'To do') ORDER BY 'Epic Link'".format(project, sprint)
         issues = jira_api.search_issues(request, startAt=start_index)
 
         if not issues:
@@ -50,6 +50,8 @@ def find_issue_in_jira_sprint(jira_api, project, sprint):
             found_issues[issue.key]= {
                 "key":issue.key,
                 "type":issue_type,
+                "status": issue.fields.status,
+                "epic": issue.fields.customfield_10014,
                 "summary":summary}
 
     return found_issues
@@ -73,12 +75,15 @@ def insert_bug_link(text):
 
 def print_jira_issue(issue):
     summary = issue["summary"]
+    category = issue["type"]
     key = key_to_md(issue["key"])
+    status = issue["status"]
+    epic = issue["epic"]
     if "LP#" in summary:
         summary = insert_bug_link(summary)
         print(" - {}".format(summary))
     else:
-        print(" - {} : {}".format(key, summary))
+        print(" - [{}] {}: {} : {}".format(status, category, key, summary))
 
 
 def print_jira_report(issues):
@@ -86,12 +91,15 @@ def print_jira_report(issues):
         return
 
     global sprint
-    category = ""
+    epic = ""
     print("# {} report".format(sprint))
     for issue in issues:
-        if issues[issue]["type"] != category:
-            category = issues[issue]["type"]
-            print("\n## {}".format(category))
+        if issues[issue]["epic"] != epic:
+            epic = issues[issue]["epic"]
+            if epic:
+                print("\n## {}".format(key_to_md(epic)))
+            else:
+                print("\n## Issues without an epic")
         print_jira_issue(issues[issue])
 
 
