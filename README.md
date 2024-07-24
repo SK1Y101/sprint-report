@@ -24,7 +24,8 @@ $> sprint-report FR "2023 Pulse #1"
 ```
 
 Before installing this tool, ensure that you have installed the Jira pip
-package:
+and natsort packages:
 ```
 $> pip install jira
+$> pip install natsort
 ```

@@ -2,6 +2,7 @@ import argparse
 import re
 import sys
 
+from natsort import natsorted
 from jira import JIRA, JIRAError
 from SprintReport.jira_api import jira_api
 
@@ -33,9 +34,9 @@ def find_issue_in_jira_sprint(jira_api, project, sprint):
 
     while True:
         start_index = issue_index * issue_batch
-        request = "project = {} " \
-            "AND cf[10020] = \"{}\" " \
-            "AND status in (Done, 'In Progress', 'In review', 'To do') ORDER BY 'Epic Link'".format(project, sprint)
+        request = f"project = {project} " \
+            f"AND cf[10020] = \"{sprint}\" " \
+            f"AND status in (Done, 'In Progress', 'In review', 'To do') ORDER BY 'Epic Link'"
         issues = jira_api.search_issues(request, startAt=start_index)
 
         if not issues:
@@ -47,6 +48,10 @@ def find_issue_in_jira_sprint(jira_api, project, sprint):
         for issue in issues:
             summary = issue.fields.summary
             issue_type = issue.fields.issuetype.name
+            try:
+                parent_key = issue.fields.parent.key
+            except AttributeError:
+                parent_key = ""
             epic_link = issue.fields.customfield_10014
             if epic_link not in epics:
                 try:
@@ -57,9 +62,10 @@ def find_issue_in_jira_sprint(jira_api, project, sprint):
             found_issues[issue.key]= {
                 "key":issue.key,
                 "type":issue_type,
-                "status": issue.fields.status,
+                "status": issue.fields.status.name,
                 "epic": epic_link,
                 "epic_name": epic_name,
+                "parent": parent_key,
                 "summary":summary}
 
     return found_issues
@@ -67,18 +73,14 @@ def find_issue_in_jira_sprint(jira_api, project, sprint):
 
 def key_to_md(key):
     global jira_server
-    markdown_link = "[{}]({})"
-
-    return markdown_link.format(key, jira_server + "/browse/" + key)
+    return f"[{key}]({jira_server}/browse/{key})"
 
 
 def insert_bug_link(text):
-    markdown_link = "[{}]({})"
     bugid = get_bug_id(text)
-    bug= "LP#" + bugid
-    link = "https://pad.lv/" + bugid
-
-    return re.sub(bug, markdown_link.format(bug, link), text)
+    bug = f"LP#{bugid}"
+    link = f"https://pad.lv/{bugid}"
+    return re.sub(bug, f"[{bug}]({link})", text)
 
 
 def print_jira_issue(issue):
@@ -86,28 +88,36 @@ def print_jira_issue(issue):
     category = issue["type"]
     key = key_to_md(issue["key"])
     status = issue["status"]
-    epic = issue["epic"]
+    # epic = issue["epic"]
     if "LP#" in summary:
         summary = insert_bug_link(summary)
-        print(" - {}".format(summary))
+        print(f" - {summary}")
     else:
-        print(" - [{}] {}: {} : {}".format(status, category, key, summary))
+        print(f" - [{status}] {category}: {key} : {summary}")
 
 
-def print_jira_report(issues):
+def print_jira_report(jira_api, project, issues):
     if not issues:
         return
-
+    
     global sprint
+    parent = ""
     epic = ""
-    print("# {} report".format(sprint))
+    print(f"# {project} {sprint} report")
+
+    issues = dict(natsorted(issues.items(), key=lambda i: (i[1]['parent'], i[1]['epic'], i[1]['key'])))
     for issue in issues:
+        if issues[issue]["parent"] != parent:
+            parent = issues[issue]["parent"]
+            parent_summary = jira_api.issue(parent).fields.summary
+            print(f"\n## {key_to_md(parent)}: {parent_summary}")
         if issues[issue]["epic"] != epic:
             epic = issues[issue]["epic"]
             if epic:
-                print("\n## {}: {}".format(key_to_md(epic), issues[issue]["epic_name"]))
+                if epic != parent: # don't print top-level epics twice
+                    print(f"\n### {key_to_md(epic)}: {issues[issue]["epic_name"]}")
             else:
-                print("\n## Issues without an epic")
+                print("\n### Issues without an epic")
         print_jira_issue(issues[issue])
 
 
@@ -137,10 +147,11 @@ def main(args=None):
     sprint = opts.sprint
     # Create a set of all Jira issues completed in a given sprint
     issues = find_issue_in_jira_sprint(jira, opts.project, sprint)
+
     print("Found {} issue{} in JIRA\n".format(
         len(issues),"s" if len(issues)> 1 else "")
     )
 
-    print_jira_report(issues)
+    print_jira_report(jira, opts.project, issues)
 
 # =============================================================================
