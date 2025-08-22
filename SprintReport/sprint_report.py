@@ -26,47 +26,38 @@ def find_issue_in_jira_sprint(jira_api, project, sprint):
     if not jira_api or not project:
         return {}
 
-    # Get JIRA issues in batch of 50
-    issue_index = 0
-    issue_batch = 50
 
     found_issues = {}
 
-    while True:
-        start_index = issue_index * issue_batch
-        request = f"project = {project} " \
-            f"AND cf[10020] = \"{sprint}\" " \
-            f"AND status in (Done, 'In Progress', 'In review', 'To do') ORDER BY 'Epic Link'"
-        issues = jira_api.search_issues(request, startAt=start_index)
+    request = f"project = {project} " \
+        f"AND cf[10020] = \"{sprint}\" " \
+        f"AND status in (Done, 'In Progress', 'In review', 'To do') ORDER BY 'Epic Link'"
+    issues = jira_api.enhanced_search_issues(request, maxResults=0)
 
-        if not issues:
-            break
-
-        issue_index += 1
-        epics = {}
-        # For each issue in JIRA with LP# in the title
-        for issue in issues:
-            summary = issue.fields.summary
-            issue_type = issue.fields.issuetype.name
+    epics = {}
+    # For each issue in JIRA with LP# in the title
+    for issue in issues:
+        summary = issue.fields.summary
+        issue_type = issue.fields.issuetype.name
+        try:
+            parent_key = issue.fields.parent.key
+        except AttributeError:
+            parent_key = ""
+        epic_link = issue.fields.customfield_10014
+        if epic_link not in epics:
             try:
-                parent_key = issue.fields.parent.key
-            except AttributeError:
-                parent_key = ""
-            epic_link = issue.fields.customfield_10014
-            if epic_link not in epics:
-                try:
-                    epics[epic_link] = jira_api.issue(epic_link).fields.summary
-                except JIRAError:
-                    epics[epic_link] = "No epic"
-            epic_name = epics[epic_link]
-            found_issues[issue.key]= {
-                "key":issue.key,
-                "type":issue_type,
-                "status": issue.fields.status.name,
-                "epic": epic_link,
-                "epic_name": epic_name,
-                "parent": parent_key,
-                "summary":summary}
+                epics[epic_link] = jira_api.issue(epic_link).fields.summary
+            except JIRAError:
+                epics[epic_link] = "No epic"
+        epic_name = epics[epic_link]
+        found_issues[issue.key]= {
+            "key":issue.key,
+            "type":issue_type,
+            "status": issue.fields.status.name,
+            "epic": epic_link,
+            "epic_name": epic_name,
+            "parent": parent_key,
+            "summary":summary}
 
     return found_issues
 
@@ -99,7 +90,7 @@ def print_jira_issue(issue):
 def print_jira_report(jira_api, project, issues):
     if not issues:
         return
-    
+
     global sprint
     parent = ""
     epic = ""
