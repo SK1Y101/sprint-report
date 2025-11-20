@@ -4,3 +4,4 @@ build
 dist
 *.md
 *.odt
+__pycache__/

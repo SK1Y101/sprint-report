@@ -17,6 +17,7 @@ If saved, this information will be persisted in ~/.jira.token
  - It will create markdown link for Jira Key
  - If a bug summary includes LP#<bug id> it will substitute it for a link to the
    Launchpad bug
+ - If `--skip-names` is not pased, the assignee for each issue will be included.
 
 Example:
 ```
@@ -26,6 +27,6 @@ $> sprint-report FR "2023 Pulse #1"
 Before installing this tool, ensure that you have installed the Jira pip
 and natsort packages:
 ```
-$> pip install jira
-$> pip install natsort
+$> sudo apt install python3-jira
+$> sudo apt install python3-natsort
 ```
